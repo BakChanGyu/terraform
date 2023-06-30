@@ -36,9 +36,10 @@ resource "aws_vpc" "vpc_1" {
 
 # vpc와 서브넷은 1:다 관계
 resource "aws_subnet" "subnet_1" {
-  vpc_id            = aws_vpc.vpc_1.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "${var.region}a"
+  vpc_id                  = aws_vpc.vpc_1.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.region}a"
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "${var.prefix}-subnet-1"
@@ -69,26 +70,121 @@ resource "aws_route_table" "rt_1" {
 }
 
 resource "aws_route_table_association" "association_1" {
-  subnet_id = aws_subnet.subnet_1.id
+  subnet_id      = aws_subnet.subnet_1.id
   route_table_id = aws_route_table.rt_1.id
 }
 
 resource "aws_security_group" "sg_1" {
   ingress {
-    from_port = 0
-    protocol  = "all"
-    to_port   = 0
+    from_port   = 0
+    protocol    = "all"
+    to_port     = 0
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
-    from_port = 0
-    protocol  = "all"
-    to_port   = 0
+    from_port   = 0
+    protocol    = "all"
+    to_port     = 0
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  vpc_id = aws_vpc.vpc_1.id
 
   tags = {
     Name = "${var.prefix}-s-1"
   }
+}
+
+# Create IAM role for EC2
+resource "aws_iam_role" "ec2_role_1" {
+  name = "${var.prefix}-ec2-role-1"
+  assume_role_policy = <<EOF
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": "sts:AssumeRole",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Effect": "Allow",
+        "Sid": ""
+      }
+    ]
+  }
+  EOF
+}
+
+# Attach AmazonS3FullAccess policy to the EC2 role
+resource "aws_iam_role_policy_attachment" "s3_full_access" {
+  role       = aws_iam_role.ec2_role_1.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+
+# Attach AmazonEC2RoleforSSM policy to the EC2 role
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
+  role       = aws_iam_role.ec2_role_1.name
+}
+
+resource "aws_iam_instance_profile" "instace_profile_1" {
+  name = "${var.prefix}-instance-profile-1"
+  role = aws_iam_role.ec2_role_1.name
+}
+
+resource "aws_instance" "ec2_1" {
+  ami                         = "ami-04b3f91ebd5bc4f6d"
+  instance_type               = "t2.micro"
+  subnet_id                   = aws_subnet.subnet_1.id
+  vpc_security_group_ids      = [aws_security_group.sg_1.id]
+  # ec2에 공인IP 할당
+  associate_public_ip_address = true
+
+  # IAM 롤을 인스턴스에 할당
+  iam_instance_profile = aws_iam_instance_profile.instace_profile_1.name
+
+  tags = {
+    Name = "${var.prefix}-ec2-1"
+  }
+}
+
+resource "aws_s3_bucket" "bucket_chans_sample_1" {
+  bucket = "${var.prefix}-bucket-chans-sample-1"
+
+  tags = {
+    Name = "${var.prefix}-bucket-chans-sample-1"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "public_access_block" {
+  bucket = aws_s3_bucket.bucket_chans_sample_1.id
+
+  block_public_acls   = false
+  block_public_policy = false
+  ignore_public_acls  = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "bucket_chans_policy_1" {
+  bucket = aws_s3_bucket.bucket_chans_sample_1.id
+
+  policy = <<EOF
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": "*",
+        "Action": [
+          "s3:GetObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::dev-bucket-chans-sample-1/*"
+        ]
+      }
+    ]
+  }
+  EOF
 }
