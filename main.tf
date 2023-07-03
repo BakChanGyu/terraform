@@ -158,6 +158,8 @@ resource "aws_s3_bucket" "bucket_chans_sample_1" {
   }
 }
 
+
+
 resource "aws_s3_bucket_public_access_block" "public_access_block" {
   bucket = aws_s3_bucket.bucket_chans_sample_1.id
 
@@ -177,14 +179,24 @@ resource "aws_s3_bucket_policy" "bucket_chans_policy_1" {
       {
         "Effect": "Allow",
         "Principal": "*",
-        "Action": [
-          "s3:GetObject"
-        ],
-        "Resource": [
-          "arn:aws:s3:::dev-bucket-chans-sample-1/*"
-        ]
+        "Action": "s3:GetObject"
+        "Resource": "arn:aws:s3:::${var.prefix}-bucket-chans-sample-1/*"
       }
     ]
   }
   EOF
+}
+
+resource "aws_route53_zone" "vpc_1_zone" {
+  vpc {
+    vpc_id = aws_vpc.vpc_1.id
+  }
+  name = "vpc-1.com"
+}
+
+resource "aws_route53_record" "record_ec2-1_vpc-1_com" {
+  zone_id = aws_route53_zone.vpc_1_zone.zone_id
+  name    = "ec2-1.vpc-1.com"
+  type    = ""
+
 }
