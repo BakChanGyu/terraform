@@ -98,7 +98,7 @@ resource "aws_security_group" "sg_1" {
 
 # Create IAM role for EC2
 resource "aws_iam_role" "ec2_role_1" {
-  name = "${var.prefix}-ec2-role-1"
+  name               = "${var.prefix}-ec2-role-1"
   assume_role_policy = <<EOF
   {
     "Version": "2012-10-17",
@@ -160,7 +160,7 @@ resource "aws_s3_bucket" "chans_sample_1" {
 
 data "aws_iam_policy_document" "chans_policy_1_statement" {
   statement {
-    sid = "PublicReadGetObject"
+    sid    = "PublicReadGetObject"
     effect = "Allow"
 
     principals {
@@ -168,7 +168,7 @@ data "aws_iam_policy_document" "chans_policy_1_statement" {
       type        = "AWS"
     }
 
-    actions = ["s3:GetObject"]
+    actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.chans_sample_1.arn}/*"]
   }
 }
@@ -176,9 +176,9 @@ data "aws_iam_policy_document" "chans_policy_1_statement" {
 resource "aws_s3_bucket_public_access_block" "public_access_block" {
   bucket = aws_s3_bucket.chans_sample_1.id
 
-  block_public_acls   = false
-  block_public_policy = false
-  ignore_public_acls  = false
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
@@ -194,12 +194,14 @@ resource "aws_route53_zone" "vpc_1_zone" {
   vpc {
     vpc_id = aws_vpc.vpc_1.id
   }
+
   name = "vpc-1.com"
 }
 
 resource "aws_route53_record" "record_ec2-1_vpc-1_com" {
   zone_id = aws_route53_zone.vpc_1_zone.zone_id
   name    = "ec2-1.vpc-1.com"
-  type    = ""
-
+  type    = "A"
+  ttl     = "300"
+  records = [aws_instance.ec2_1.private_ip]
 }
