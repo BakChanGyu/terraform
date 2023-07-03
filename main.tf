@@ -107,12 +107,12 @@ resource "aws_iam_role" "ec2_role_1" {
     "Version": "2012-10-17",
     "Statement": [
       {
+        "Sid": "",
         "Action": "sts:AssumeRole",
         "Principal": {
           "Service": "ec2.amazonaws.com"
         },
-        "Effect": "Allow",
-        "Sid": ""
+        "Effect": "Allow"
       }
     ]
   }
@@ -153,15 +153,15 @@ resource "aws_instance" "ec2_1" {
   }
 }
 
-resource "aws_s3_bucket" "chans_sample_1" {
-  bucket = "${var.prefix}-chans-sample-1"
+resource "aws_s3_bucket" "bucket_1" {
+  bucket = "${var.prefix}-bucket-${var.nickname}-1"
 
   tags = {
-    Name = "${var.prefix}-chans-sample-1"
+    Name = "${var.prefix}-bucket-${var.nickname}-1"
   }
 }
 
-data "aws_iam_policy_document" "chans_policy_1_statement" {
+data "aws_iam_policy_document" "bucket_1_policy_1_statement" {
   statement {
     sid    = "PublicReadGetObject"
     effect = "Allow"
@@ -172,25 +172,26 @@ data "aws_iam_policy_document" "chans_policy_1_statement" {
     }
 
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.chans_sample_1.arn}/*"]
+    resources = ["${aws_s3_bucket.bucket_1.arn}/*"]
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "public_access_block" {
-  bucket = aws_s3_bucket.chans_sample_1.id
+resource "aws_s3_bucket_policy" "bucket_1_policy_1" {
+  bucket = aws_s3_bucket.bucket_1.id
+
+  policy = data.aws_iam_policy_document.bucket_1_policy_1_statement.json
+
+  depends_on = [aws_s3_bucket_public_access_block.bucket_1_public_access_block_1]
+}
+
+resource "aws_s3_bucket_public_access_block"
+"bucket_1_public_access_block_1" {
+  bucket = aws_s3_bucket.bucket_1.id
 
   block_public_acls       = false
   block_public_policy     = false
   ignore_public_acls      = false
   restrict_public_buckets = false
-}
-
-resource "aws_s3_bucket_policy" "chans_policy_1" {
-  bucket = aws_s3_bucket.chans_sample_1.id
-
-  policy = data.aws_iam_policy_document.chans_policy_1_statement.json
-
-  depends_on = [aws_s3_bucket_public_access_block.public_access_block]
 }
 
 resource "aws_route53_zone" "vpc_1_zone" {
@@ -207,4 +208,95 @@ resource "aws_route53_record" "record_ec2-1_vpc-1_com" {
   type    = "A"
   ttl     = "300"
   records = [aws_instance.ec2_1.private_ip]
+}
+
+resource "aws_s3_bucket" "bucket_2" {
+  bucket = "${var.prefix}-bucket-${var.nickname}-2"
+
+  tags = {
+    Name = "${var.prefix}-bucket-${var.nickname}-2"
+  }
+}
+
+data "template_file" "template_file_1" {
+  template = "Hello"
+}
+
+resource "aws_s3_object" "object" {
+  bucket       = aws_s3_bucket.bucket_2.id
+  key          = "index.html"
+  content      = data.template_file.template_file_1.rendered
+  content_type = "text/html"
+
+  etag       = md5(data.template_file.template_file_1.rendered)
+  depends_on = [aws_s3_bucket.bucket_2]
+}
+
+resource "aws_cloudfront_origin_access_control" "oac_1" {
+  name                              = "oac-1"
+  description                       = ""
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_cloudfront_distribution" "cd_1" {
+  enabled = true
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id = "origin_id_1"
+
+    forwarded_values {
+      query_string = false
+
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+  }
+
+  origin {
+    domain_name = aws_s3_bucket.bucket_2.bucket_regional_domain_name
+    origin_id   = "origin_id_1"
+    origin_access_control_id = aws_cloudfront_origin_access_control.oac_1.id
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+
+data "aws_iam_policy_document" "bucket2_policy_1_statement" {
+  statement {
+    actions = ["s3:GetObject"]
+
+    resources = ["${aws_s3_bucket.bucket_2.arn}/*"]
+
+    principals {
+      identifiers = ["cloudfront.amazonaws.com"]
+      type        = "Service"
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values = [aws_cloudfront_distribution.cd_1.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "bucket_2_policy_1" {
+  bucket = aws_s3_bucket.bucket_2.id
+
+  policy = data.aws_iam_policy_document.bucket2_policy_1_statement.json
 }
