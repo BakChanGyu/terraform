@@ -150,18 +150,31 @@ resource "aws_instance" "ec2_1" {
   }
 }
 
-resource "aws_s3_bucket" "bucket_chans_sample_1" {
-  bucket = "${var.prefix}-bucket-chans-sample-1"
+resource "aws_s3_bucket" "chans_sample_1" {
+  bucket = "${var.prefix}-chans-sample-1"
 
   tags = {
-    Name = "${var.prefix}-bucket-chans-sample-1"
+    Name = "${var.prefix}-chans-sample-1"
   }
 }
 
+data "aws_iam_policy_document" "chans_policy_1_statement" {
+  statement {
+    sid = "PublicReadGetObject"
+    effect = "Allow"
 
+    principals {
+      identifiers = ["*"]
+      type        = "AWS"
+    }
+
+    actions = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.chans_sample_1.arn}/*"]
+  }
+}
 
 resource "aws_s3_bucket_public_access_block" "public_access_block" {
-  bucket = aws_s3_bucket.bucket_chans_sample_1.id
+  bucket = aws_s3_bucket.chans_sample_1.id
 
   block_public_acls   = false
   block_public_policy = false
@@ -169,22 +182,12 @@ resource "aws_s3_bucket_public_access_block" "public_access_block" {
   restrict_public_buckets = false
 }
 
-resource "aws_s3_bucket_policy" "bucket_chans_policy_1" {
-  bucket = aws_s3_bucket.bucket_chans_sample_1.id
+resource "aws_s3_bucket_policy" "chans_policy_1" {
+  bucket = aws_s3_bucket.chans_sample_1.id
 
-  policy = <<EOF
-  {
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Effect": "Allow",
-        "Principal": "*",
-        "Action": "s3:GetObject"
-        "Resource": "arn:aws:s3:::${var.prefix}-bucket-chans-sample-1/*"
-      }
-    ]
-  }
-  EOF
+  policy = data.aws_iam_policy_document.chans_policy_1_statement.json
+
+  depends_on = [aws_s3_bucket_public_access_block.public_access_block]
 }
 
 resource "aws_route53_zone" "vpc_1_zone" {
